@@ -10,14 +10,14 @@ permissions:
   contents: write
 
 jobs:
-  build-linux:
-    name: Build Linux (Deb, RPM, AppImage)
+  build-all:
+    name: Build All Platforms (Linux & Windows)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies
+      - name: Install Linux Build Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential curl pkg-config git \
@@ -30,33 +30,22 @@ jobs:
           cargo install cargo-deb
           cargo install cargo-generate-rpm
 
-      - name: Build Release Binary
+      - name: Build Linux Artifacts (Deb, RPM, AppImage)
         run: |
+          # 1. Build release binary
           cargo build --release
-
-      - name: Build Debian Package (.deb)
-        run: |
+          
+          # 2. Build packages
           mkdir -p dist
           cargo deb --output dist/
-
-      - name: Build RPM Package (.rpm)
-        run: |
           cargo generate-rpm
           mv target/generate-rpm/*.rpm dist/
 
-      - name: Build AppImage
-        run: |
-          # Create AppDir structure
+          # 3. Build AppImage
           rm -rf AppDir
-          mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/share/raylib2048/assets
-          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-          mkdir -p AppDir/usr/share/applications
-
+          mkdir -p AppDir/usr/bin AppDir/usr/share/raylib2048/assets AppDir/usr/share/icons/hicolor/256x256/apps AppDir/usr/share/applications
           cp target/release/raylib2048 AppDir/usr/bin/
           cp -r assets/* AppDir/usr/share/raylib2048/assets/
-
-          # Create desktop file
           cat > AppDir/usr/share/applications/raylib2048.desktop <<EOF
           [Desktop Entry]
           Type=Application
@@ -66,94 +55,50 @@ jobs:
           Categories=Game;
           Terminal=false
           EOF
-
-          # Fetch Icon (Using Raylib logo as placeholder)
           wget -q -O AppDir/usr/share/icons/hicolor/256x256/apps/raylib2048.png https://raw.githubusercontent.com/raysan5/raylib/master/logo/raylib_256x256.png
-
-          # Get LinuxDeploy
           wget -q -O linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           chmod +x linuxdeploy
-
-          # Extract linuxdeploy (avoid FUSE issues in CI)
           ./linuxdeploy --appimage-extract > /dev/null
-
-          # Run LinuxDeploy
           ./squashfs-root/AppRun --appdir AppDir --output appimage \
             --desktop-file AppDir/usr/share/applications/raylib2048.desktop \
             --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/raylib2048.png
-
           mv *.AppImage dist/
 
-      - name: Prepare Artifacts
+      - name: Build Windows Artifacts (Zip & Installer)
         run: |
-          # Copy binary and assets
-          cp target/release/raylib2048 dist/
-          cp -r assets dist/
+          chmod +x test_build_win.sh
+          ./test_build_win.sh
 
-          # Copy scripts and README
-          cp setup_env_deb.sh dist/
-          cp test_setup_env_deb.sh dist/
-          cp README.md dist/
+      - name: Prepare Linux Tarball
+        run: |
+          # Create a tarball containing the Linux binary, assets, and scripts
+          # Note: We use a temp dir to avoid including the other dist artifacts in the tarball
+          mkdir -p dist_tmp
+          cp target/release/raylib2048 dist_tmp/
+          cp -r assets dist_tmp/
+          cp setup_env_deb.sh test_setup_env_deb.sh README.md dist_tmp/
           
-          # Create tarball
-          cd dist
-          tar -czvf raylib2048-linux-x86_64.tar.gz raylib2048 assets setup_env_deb.sh test_setup_env_deb.sh README.md
-          
-          # Cleanup raw files
-          rm raylib2048
-          rm -rf assets
-          rm setup_env_deb.sh test_setup_env_deb.sh README.md
+          cd dist_tmp
+          tar -czvf ../dist/raylib2048-linux-x86_64.tar.gz *
           cd ..
+          rm -rf dist_tmp
 
-      - name: Upload Linux Artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-artifacts
+          name: all-artifacts
           path: dist/*
-
-  build-windows:
-    name: Build Windows
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Build Release Binary
-        run: cargo build --release
-
-      - name: Prepare Artifacts
-        shell: powershell
-        run: |
-          New-Item -ItemType Directory -Force -Path dist
-          Copy-Item -Path "target\release\raylib2048.exe" -Destination "dist\"
-          Copy-Item -Path "assets" -Destination "dist\" -Recurse
-          Copy-Item -Path "README.md" -Destination "dist\"
-          
-          cd dist
-          Compress-Archive -Path "raylib2048.exe", "assets", "README.md" -DestinationPath "raylib2048-windows-x86_64.zip"
-
-      - name: Upload Windows Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-artifacts
-          path: dist/raylib2048-windows-x86_64.zip
 
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [build-linux, build-windows]
+    needs: build-all
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - name: Download Linux Artifacts
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: linux-artifacts
-          path: dist
-
-      - name: Download Windows Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-artifacts
+          name: all-artifacts
           path: dist
 
       - name: Create Release
@@ -165,4 +110,5 @@ jobs:
             dist/*.rpm
             dist/*.AppImage
             dist/*.zip
+            dist/*.exe
           generate_release_notes: true

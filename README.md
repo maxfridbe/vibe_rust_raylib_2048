@@ -60,6 +60,32 @@ The binary will be located at `target/release/raylib2048`.
 *   **[rand](https://crates.io/crates/rand):** For random tile generation.
 *   **std:** Standard library for file system and path handling.
 
+## Building for Windows (on Linux)
+
+You can cross-compile the project for Windows from a Linux host using MinGW-w64. Similar to the Linux build, a test script is provided to handle this in an isolated Podman container.
+
+### Windows Build Environment (Podman)
+
+To build the Windows environment image and compile the project:
+
+```bash
+./test_build_win.sh
+```
+
+This will:
+1.  Create a Podman image named `raylib2048-win-build-env`.
+2.  Install `mingw-w64`, `zip`, and the Rust Windows target.
+3.  Compile the project for Windows (`x86_64-pc-windows-gnu`).
+4.  Package the executable, assets, and documentation into `raylib2048-windows-x86_64.zip`.
+
+### Manual Windows Cross-Compilation
+
+If you have `mingw-w64` and the `x86_64-pc-windows-gnu` Rust target installed on your host, you can use the helper script:
+
+```bash
+./build_win.sh
+```
+
 ## Directory Structure
 
 *   `src/`: Source code (`main.rs`, `game.rs`).

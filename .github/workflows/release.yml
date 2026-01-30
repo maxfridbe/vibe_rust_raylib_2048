@@ -87,16 +87,23 @@ jobs:
 
       - name: Prepare Artifacts for Release
         run: |
-          # Copy scripts and README to dist/ for the tarball, but keep packages separate
+          # Copy binary and assets
+          cp target/release/raylib2048 dist/
+          cp -r assets dist/
+
+          # Copy scripts and README to dist/ for the tarball
           cp setup_env_deb.sh dist/
           cp test_setup_env_deb.sh dist/
           cp README.md dist/
           
-          # Create a tarball containing the binary and scripts (legacy artifact)
-          # We'll put it in a subfolder or rename to avoid clashing with the .deb/.rpm
+          # Create a tarball containing the binary, assets, and scripts
           cd dist
-          tar -czvf raylib2048-linux-x86_64.tar.gz raylib2048 setup_env_deb.sh test_setup_env_deb.sh README.md
-          rm raylib2048  # Remove the raw binary so it's not double-uploaded if we glob *
+          tar -czvf raylib2048-linux-x86_64.tar.gz raylib2048 assets setup_env_deb.sh test_setup_env_deb.sh README.md
+          
+          # Clean up raw files so the directory only contains artifacts to upload
+          rm raylib2048
+          rm -rf assets
+          rm setup_env_deb.sh test_setup_env_deb.sh README.md
           cd ..
 
       - name: Create Release

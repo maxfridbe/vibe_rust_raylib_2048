@@ -4,7 +4,7 @@ set -e
 # Ensure output directory exists
 mkdir -p dist
 
-echo "Starting Podman container for build..."
+IMAGE_NAME="raylib2048-linux-build-env"
 
 # Check if podman exists
 if ! command -v podman &> /dev/null; then
@@ -12,16 +12,23 @@ if ! command -v podman &> /dev/null; then
     exit 1
 fi
 
-podman run --rm --cgroup-manager=cgroupfs --network host -v $(pwd):/app -w /app docker.io/library/rust:bullseye /bin/bash -c '
-set -e
-echo "Updating apt..."
-apt-get update > /dev/null
-echo "Installing dependencies..."
-apt-get install -y cmake clang libclang-dev libasound2-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxinerama-dev rpm wget file desktop-file-utils > /dev/null
+# Build the build environment image if it doesn't exist
+if [[ "$(podman images -q $IMAGE_NAME 2> /dev/null)" == "" ]]; then
+    echo "Building build environment image..."
+    cat <<EOF | podman build -t $IMAGE_NAME -f - .
+FROM docker.io/library/rust:bullseye
+RUN apt-get update && \
+    apt-get install -y cmake clang libclang-dev libasound2-dev libx11-dev \
+    libxrandr-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev \
+    libxinerama-dev rpm wget file desktop-file-utils && \
+    rm -rf /var/lib/apt/lists/*
+RUN cargo install cargo-deb cargo-generate-rpm
+EOF
+fi
 
-echo "Installing Cargo tools (this may take a while)..."
-cargo install cargo-deb
-cargo install cargo-generate-rpm
+echo "Running build in container..."
+podman run --rm -v "$(pwd):/app:Z" -w /app $IMAGE_NAME /bin/bash -c '
+set -e
 
 echo "Building project (Release)..."
 cargo build --release
@@ -70,7 +77,9 @@ fi
 ./linuxdeploy --appimage-extract > /dev/null
 
 # Run LinuxDeploy
-./squashfs-root/AppRun --appdir AppDir --output appimage --desktop-file AppDir/usr/share/applications/raylib2048.desktop --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/raylib2048.png
+./squashfs-root/AppRun --appdir AppDir --output appimage \
+    --desktop-file AppDir/usr/share/applications/raylib2048.desktop \
+    --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/raylib2048.png
 
 mv *.AppImage dist/
 

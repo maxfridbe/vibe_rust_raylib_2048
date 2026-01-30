@@ -10,8 +10,40 @@ const CELL_SIZE: i32 = (WINDOW_WIDTH - (GRID_SIZE as i32 + 1) * GRID_PADDING) / 
 const TOP_OFFSET: i32 = 100;
 const ANIMATION_DURATION: f32 = 0.15;
 
+use std::path::Path;
+
 struct Animation {
     move_data: TileMove,
+}
+
+fn find_asset(filename: &str) -> String {
+    let mut paths = vec![
+        format!("assets/{}", filename),
+        format!("/usr/share/raylib2048/assets/{}", filename),
+    ];
+
+    // Check APPDIR environment variable (set by AppImage)
+    if let Ok(appdir) = std::env::var("APPDIR") {
+        paths.push(format!("{}/usr/share/raylib2048/assets/{}", appdir, filename));
+    }
+
+    // Check relative to executable location (e.g. ../share/raylib2048/assets/)
+    // This handles cases where bin is in /usr/bin or AppDir/usr/bin
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            // If we are in /usr/bin, we want ../share/raylib2048/assets
+            let relative_share = exe_dir.join("../share/raylib2048/assets").join(filename);
+            paths.push(relative_share.to_string_lossy().to_string());
+        }
+    }
+    
+    for path in &paths {
+        if Path::new(path).exists() {
+            // println!("Found asset at: {}", path); // Debug if needed
+            return path.clone();
+        }
+    }
+    format!("assets/{}", filename) // Default fallback
 }
 
 fn get_color(value: u32) -> Color {
@@ -73,12 +105,12 @@ fn main() {
 
     let mut audio = RaylibAudio::init_audio_device().expect("Failed to initialize audio device");
     
-    let mut move_sound: Option<Sound> = match audio.new_sound("assets/move.wav") {
+    let mut move_sound: Option<Sound> = match audio.new_sound(&find_asset("move.wav")) {
         Ok(s) => Some(s),
         Err(_) => None,
     };
     
-    let mut merge_sound: Option<Sound> = match audio.new_sound("assets/merge.wav") {
+    let mut merge_sound: Option<Sound> = match audio.new_sound(&find_asset("merge.wav")) {
         Ok(s) => Some(s),
         Err(_) => None,
     };

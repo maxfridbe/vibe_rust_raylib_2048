@@ -4,3 +4,7 @@ target/
 *.log
 highscore.txt
 .gemini/
+dist/
+AppDir/
+linuxdeploy
+squashfs-root/

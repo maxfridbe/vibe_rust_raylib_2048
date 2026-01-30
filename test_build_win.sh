@@ -31,5 +31,5 @@ podman run --rm -v "$(pwd):/app:Z" -w /app $IMAGE_NAME /bin/bash -c "
     ./build_win.sh
 "
 
-echo "Build complete. Check for raylib2048-windows-x86_64.zip"
+echo "Build complete. Check for dist/raylib2048-windows-x86_64.zip"
 rm Containerfile.win

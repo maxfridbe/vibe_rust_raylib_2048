@@ -57,6 +57,7 @@ cp README.md "$DIST_DIR/"
 
 # Create Zip
 echo "Creating ZIP archive..."
-zip -r raylib2048-windows-x86_64.zip "$DIST_DIR"
+mkdir -p dist
+zip -r dist/raylib2048-windows-x86_64.zip "$DIST_DIR"
 
-echo "Done! Artifact: raylib2048-windows-x86_64.zip"
+echo "Done! Artifact: dist/raylib2048-windows-x86_64.zip"

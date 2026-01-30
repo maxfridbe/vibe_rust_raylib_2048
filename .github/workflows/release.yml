@@ -10,10 +10,9 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build and Release
+  build-linux:
+    name: Build Linux (Deb, RPM, AppImage)
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -85,34 +84,85 @@ jobs:
 
           mv *.AppImage dist/
 
-      - name: Prepare Artifacts for Release
+      - name: Prepare Artifacts
         run: |
           # Copy binary and assets
           cp target/release/raylib2048 dist/
           cp -r assets dist/
 
-          # Copy scripts and README to dist/ for the tarball
+          # Copy scripts and README
           cp setup_env_deb.sh dist/
           cp test_setup_env_deb.sh dist/
           cp README.md dist/
           
-          # Create a tarball containing the binary, assets, and scripts
+          # Create tarball
           cd dist
           tar -czvf raylib2048-linux-x86_64.tar.gz raylib2048 assets setup_env_deb.sh test_setup_env_deb.sh README.md
           
-          # Clean up raw files so the directory only contains artifacts to upload
+          # Cleanup raw files
           rm raylib2048
           rm -rf assets
           rm setup_env_deb.sh test_setup_env_deb.sh README.md
           cd ..
 
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: dist/*
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Release Binary
+        run: cargo build --release
+
+      - name: Prepare Artifacts
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item -Path "target\release\raylib2048.exe" -Destination "dist\"
+          Copy-Item -Path "assets" -Destination "dist\" -Recurse
+          Copy-Item -Path "README.md" -Destination "dist\"
+          
+          cd dist
+          Compress-Archive -Path "raylib2048.exe", "assets", "README.md" -DestinationPath "raylib2048-windows-x86_64.zip"
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: dist/raylib2048-windows-x86_64.zip
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download Linux Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-artifacts
+          path: dist
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-artifacts
+          path: dist
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            dist/raylib2048-linux-x86_64.tar.gz
+            dist/*.tar.gz
             dist/*.deb
             dist/*.rpm
             dist/*.AppImage
+            dist/*.zip
           generate_release_notes: true
